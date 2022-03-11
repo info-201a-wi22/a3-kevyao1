@@ -1,0 +1,220 @@
+---
+title: "Exploring the Incarceration Data"
+author: "Bowen Yao"
+date: '2022-03-07'
+output: html_document
+---
+
+# 0. Instructions
+
+In this assignment, you will use your data analysis and visualization skills to **expose patterns of inequality using incarceration data** collected by the Vera Institute. In doing so, you will:
+
+* Work with a real world, messy dataset
+* Choose your own direction for analysis, including which variables to analyze and compare
+* Design and build compelling visualizations to expose particular patterns in the data
+* Create a website (using RMarkdown) to share your results
+* This assignment is more open-ended than previous ones -- you will be tasked with understanding the data itself, choosing the variables you want to analyze, and deciding the optimal way to write your code. 
+
+Not restrained by this structure. For example, you can add additional encodings, use interactive charting packages in addition to ggplot2, layout multiple plots next to one another with the patchwork package, and take this in various other directions!
+
+Note: Please do **not** use the Shiny package.
+
+### Data
+
+The incarceration_trends.csv file.
+
+You don't need to worry about "imputing" missing values, but when choosing what to visualize, you will want to focus on a particular location and/or year that has sufficient data.
+
+### Assignment structure
+
+For this assignment, you will create a report about incarceration in the U.S., which must include:
+
+An introduction of the problem domain and a description of the variable(s) you are choosing to analyze (and why!)
+
+A paragraph of summary information, citing at least 5 values calculated from the data
+
+A chart that shows trends over time for a variable of your choice
+
+A chart that compares two variables to one another
+
+A map that shows how your measure of interest varies geographically
+
+See below for additional information for each component. 
+
+### Introduction + Summary Information
+
+* Describe the variables that you've chosen to analyze. Which measure(s) of incarceration are you focusing on? 
+* At least 5 relevant values of interest calculated using DPLYR, related to: The average across all the counties (in the current year)? Where is the highest / lowest? How much has it changed over the last N years?
+* Measures of incarceration vary by race. 
+
+### Trends over time chart
+
+* show the trend over time of your variable/topic. Some requirements to help guide your design: Show more than one but fewer than ~10 lines over time. Clear x and y axis labels. A clear title. A legend.
+* In your .Rmd file, make sure to describe why you included the chart, and what patterns emerged
+
+### Variable comparison chart
+
+* show how two different (continuous) variables are related to one another. Some requirements: Clear x and y axis labels, a clear title, a legend for your different color and a clear legend title
+* In your .Rmd file, make sure to describe why you included the chart, and what patterns emerged
+
+### Map
+
+* show how a variable is distributed geographically. Some requirements: A title, the color scale with a legend with a clear label, Use a map based coordinate system to set the aspect ratio of your map (see reading), `theme_minimal()` for the map (see reading)
+* In your .Rmd file, make sure to describe why you included the chart, and what patterns emerged
+Feel free to get creative
+
+### Submission
+
+* editing your analysis.r and index.Rmd files
+* compile your page to a website. 
+* git to add and commit the changes you've made, and push those changes to your repository on GitHub.
+* Once you change the GitHub Pages permissions to publish your website, you should be able to see it on the web! Please submit the URL of your GitHub Repository as you assignment submission on Canvas.
+
+# 1. Introduction and Summary Information
+
+```{r setup, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(kableExtra)
+library(knitr)
+library(usmap)
+
+link = "https://raw.githubusercontent.com/vera-institute/incarceration-trends/master/incarceration_trends.csv"
+data <- read_csv(link)
+link2 = "https://raw.githubusercontent.com/kjhealy/fips-codes/master/state_and_county_fips_master.csv"
+fips_code <- read_csv(link2)
+top6_counties <- c("Los Angeles County", "San Diego County", "Orange County", "Riverside County",
+                    "San Bernardino County", "Santa Clara County")
+variable_definition <- "Variable_Name, Definition
+year, Year
+fips, County Identification Code
+county_name, County Name
+total_prison_adm_rate, Total Prison Admissions Rate
+aapi_prison_adm_rate, Prison Admissions Rate (Asian American / Pacific Islander)
+black_prison_adm_rate, Prison Admissions Rate (Black)
+latinx_prison_adm_rate, Prison Admissions Rate (Latin)
+native_prison_adm_rate, Prison Admissions Rate (Native American)
+white_prison_adm_rate, Prison Admissions Rate (White)"
+variable_definition <- read.csv(text = variable_definition)
+```
+
+
+In this assignment, I am interested at prison admission in **top 6 popultated counties in California** each year measured as a rate per 100,000 population. These counties are `r cat(top6_counties, sep = ", ")`. I would like to focus on the difference in prison admission rate in different ethnicities. The definitions for the variables I selected are listed in the table below:
+
+```{r, echo=FALSE}
+kableExtra::kbl(variable_definition, caption = "Definitions of Selected Variables") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+Relevant values of interest are summarized in the table below:
+
+```{r data clean, message=FALSE, warning=FALSE}
+#data clean
+fips_code_ca <- fips_code %>%
+  filter(!is.na(state)) %>% filter(state =="CA")
+data_ca <- data %>% 
+  select(variable_definition$Variable_Name) %>%
+  filter(fips %in% fips_code_ca$fips)
+data_ca_top6_m_clean <- data_ca %>%
+  filter(county_name %in% top6_counties) %>%
+  mutate(across(variable_definition$Variable_Name[4:9], ~na_if(., 0))) %>%
+  pivot_longer(cols = variable_definition$Variable_Name[4:9], 
+               names_to = "Ethnicity", values_to = "Admission_Rate")
+data_ca_top6_m_clean$Ethnicity <- factor(data_ca_top6_m_clean$Ethnicity)
+data_ca_top6_m_clean$Ethnicity <- fct_recode(data_ca_top6_m_clean$Ethnicity, 
+                                              `Asian and Pacific Islander` = "aapi_prison_adm_rate",
+                                              `Black` = "black_prison_adm_rate",
+                                              `Latin` = "latinx_prison_adm_rate",
+                                              `Native American` = "native_prison_adm_rate",
+                                              `White` = "white_prison_adm_rate",
+                                              `Overall` = "total_prison_adm_rate")
+```
+
+```{r data clean & summary, message=FALSE, warning=FALSE}
+#summary table
+data_ca_top6_m_clean %>%
+  filter(year == 2015) %>% 
+  group_by(Ethnicity) %>%
+  summarize("Average Value in 2015" = round(mean(Admission_Rate), digits = 1),
+            "Highest Value in 2015" = max(Admission_Rate),
+            "Country with the Highest Admisson Rate" = county_name[which.max(Admission_Rate)],
+            "Lowest Value in 2015" = min(Admission_Rate),
+            "Country with the Lowest Admisson Rate" = county_name[which.min(Admission_Rate)]) -> c1
+
+data_ca_top6_m_clean %>% 
+  filter(year %in% c(1995, 2015)) %>% 
+  group_by(year, Ethnicity) %>%
+  summarise("Average_6" = mean(Admission_Rate)) %>%
+  group_by(Ethnicity) %>%
+  summarise("Change from 1995 to 2015, All 6 Counties average" = 
+              paste( round( 
+                (Average_6[year == 2015] - Average_6[year == 1995]) / Average_6[year == 1995] * 100,
+                digits = 0), "%", sep = "")
+  ) -> c2
+
+data_summary <- full_join(c1, c2) %>% relocate(`Change from 1995 to 2015, All 6 Counties average`, 
+                                               .after = `Average Value in 2015`)
+kableExtra::kbl(data_summary, caption = "Summary Table of the Selected Variables") %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+# 2. Trends over time chart
+
+In the figure below, I would like to explore the prison admission rate in each ethnicity over 20 years in the 6 most populated counties in California. Therefore, I used a line plot to show the tendencies and arranged figures of different counties in different facets. 
+
+From the figure below, we can clearly identify a pattern where black Americans have an overall higher prison admission rate in all 6 counties than other ethnicities while Asians and Pacific Islanders have an overall lower prison admission rate. In addition, we can also find that prison admission rates have gradually decreased across all the 6 counties over the 20 years.
+
+```{r time chart, message=FALSE, warning=FALSE, fig.width=10, fig.height=6, dpi=300}
+data_ca_top6_m_clean %>% 
+  filter(year >= 1995 & year <= 2015 & Ethnicity != "Overall") %>%
+  rename(`Counties` = "county_name", 
+         `Prison Admission Rate (per 100k population)` = "Admission_Rate", 
+         `Year` = "year" ) %>%
+  ggplot(aes(x = Year, 
+             y = `Prison Admission Rate (per 100k population)`, 
+             color = Ethnicity)) +
+    geom_line() + geom_point() + 
+    facet_wrap(.~ Counties, ncol = 3) +
+    scale_color_brewer(palette = "Set1") + 
+    scale_y_sqrt() + 
+    ggtitle("Prison Admission Rates between 1995 and 2015 in Top 6 Popultated Counties in California, by Ethnicities") +
+    theme_bw(base_size = 12) +
+    theme(axis.text.x = element_text(angle = 45, vjust = 0.25))
+```
+
+# 3. Variable comparison chart
+
+I aimed to compare the prison admission rates of white and black Americans over years in the 6 most populated counties in California. I assumed that there are some associations between the prison admission rates of the two ethnicities. In order to show how the two different variables are related, I used a scatter plot with regression lines which clearly indicates their relationship.
+
+The figure below showed that the prison admission rate of black Americans changed in proportion to that of white Americans in the 6 counties over years, though different counties may have different proportion. This phenomenon may suggest there are some common social factors influencing both black and white Americans, such as economic development and changes in California state laws. 
+
+
+```{r variable comparison, message=FALSE, warning=FALSE, fig.width=8, fig.height=6, dpi=300}
+data_ca_top6_m_clean %>% filter(Ethnicity %in% c("Black", "White")) %>%
+  pivot_wider(names_from = Ethnicity, values_from = Admission_Rate) %>%
+  drop_na() %>%
+  mutate(county_name = str_remove(county_name, " County")) %>%
+  ggplot(aes(x = White, y = Black, color = county_name)) +
+  geom_point() +
+  geom_smooth(method = "lm", se=FALSE, formula = y ~ x) +
+  ggtitle("Prison Admission Rates of White and Black Americans in the 6 \nMost Populated Counties in California") + 
+  theme_bw(base_size = 12) + 
+  scale_color_brewer("Couties", palette = "Set2") + 
+  xlab("Prison Admission Rate (per 100k White Americans)") +
+  ylab("Prison Admission Rate (per 100k Black Americans)")
+```
+
+# 4. Map
+
+Here I aimed to visualize prison admission rates in different counties in California in 2015. Therefore, I used a map plot to show the geographical distribution of the prison admission rate, with different colors indicating values of the rates. 
+
+From the figure below, we can identify a tendency that prison admission rates appeared to be geographically correlated. Namely, counties tend to have a higher prison admission rate if they are adjacent to other counties with high rates. This phenomenon might be due to the travelling of potential criminals. 
+
+```{r map, message=FALSE, warning=FALSE, fig.width=10, fig.height=6, dpi=300}
+temp <- data_ca %>% filter(year == 2015) 
+temp$fips <- as.character(temp$fips)
+plot_usmap(data = temp, regions = "counties", include = "CA", 
+           values = "total_prison_adm_rate", color = "grey40")+ 
+  labs(title = "Prison Admission Rates in 2015 in California, by Counties") +
+  scale_fill_viridis_c("Prison Admission Rate (per 100k population)") +
+  theme(legend.position = "right")
+```
