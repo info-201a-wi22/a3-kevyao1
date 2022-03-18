@@ -72,6 +72,8 @@ Feel free to get creative
 
 # 1. Introduction and Summary Information
 
+The judicial system in United States today has a lot of injustice cases and systematic racism, the infamous George Floyd case is an outcome of such injustices. The research should reflect on the inequalities of the law enforcement systems.
+
 ```{r setup, message=FALSE, warning=FALSE}
 library(tidyverse)
 library(kableExtra)
